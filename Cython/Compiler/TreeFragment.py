@@ -268,10 +268,11 @@ class TreeFragment:
                                    substitutions = nodes,
                                    temps = self.temps + temps, pos = pos)
 
-    def generate_stubs(self):
+    def generate_stubs(self, stub_gen: StubGenerator = None):
         """ Generate stub ASTs from the tree fragment."""
-        stub_gen = StubGenerator()
-        module = py_ast.Module(body=self.root.generate_stub_asts(stub_gen), type_ignores=[])
+        if stub_gen is None:
+            stub_gen = StubGenerator()
+        module = py_ast.Module(body=self.root.generate_stub_nodes(stub_gen), type_ignores=[])
         module = py_ast.fix_missing_locations(module)
         return module
 

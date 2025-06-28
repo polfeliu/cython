@@ -3,7 +3,8 @@ from ast import unparse
 
 class StubGenerator:
 
-    def __init__(self):
+    def __init__(self, error_on_missing_implementation: bool = False):
+        self.error_on_missing_implementation = error_on_missing_implementation
         self.__required_imports = {
             # Library path -> {names}
         }
@@ -26,7 +27,7 @@ class StubGenerator:
         return self.require_import('typing', 'Any')
 
 
-def write_stubs_to_file(stub_asts, output_file: str):
+def write_stubs_to_file(stub_asts, output_file: str):  # TODO Move
     """
     Write the generated stubs to a file.
 

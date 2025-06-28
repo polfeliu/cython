@@ -257,7 +257,13 @@ class Node:
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         """Generate a Python AST stub node for this Cython node."""
-        raise NotImplementedError(f"Conversion to pyi stub not implemented for node {type(self).__name__}")
+        error = f"Conversion to pyi stub not implemented for node {type(self).__name__}"
+        if stub_gen.error_on_missing_implementation:
+            raise NotImplementedError(error)
+        else:
+            warning(self.pos, error, 1)
+            return None
+
 
     def generate_stub_nodes(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         """Generate list of Python AST nodes for this Cython node."""
@@ -267,7 +273,7 @@ class Node:
         return [child]
 
     @staticmethod
-    def generate_arguments(arguments: list[Union["CArgDeclNode", "PyArgDeclNode"]]) -> py_ast.arguments:
+    def generate_arguments(arguments: list[Union["CArgDeclNode", "PyArgDeclNode"]], stub_gen: StubGenerator) -> py_ast.arguments:
         args = []
         for argument in arguments:
             if isinstance(argument, CArgDeclNode):
@@ -406,7 +412,7 @@ class CompilerDirectivesNode(Node):
         self.body.annotate(code)
         code.globalstate.directives = old
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         # Compiler directives are not represented in the stub AST.
         return None
 
@@ -461,11 +467,11 @@ class StatListNode(Node):
         for stat in self.stats:
             stat.annotate(code)
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_nodes(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         py_nodes = []
         for node in self.stats:
             if isinstance(node, StatListNode):
-                py_nodes.extend(node.generate_stub_asts(stub_gen))
+                py_nodes.extend(node.generate_stub_nodes(stub_gen))
             else:
                 py_stub = node.generate_stub_node(stub_gen)
                 if py_stub is not None:
@@ -533,6 +539,10 @@ class CDefExternNode(StatNode):
     def annotate(self, code):
         self.body.annotate(code)
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        # Externally imported C is not accessible from python
+        return None
+
 
 class CDeclaratorNode(Node):
     # Part of a C declaration.
@@ -593,7 +603,7 @@ class CNameDeclaratorNode(CDeclaratorNode):
         self.type = base_type
         return self, base_type
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return py_ast.Name(id=self.name)
 
 
@@ -1119,7 +1129,7 @@ class CArgDeclNode(Node):
         default.generate_post_assignment_code(code)
         default.free_temps(code)
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return py_ast.arg(
             arg=self.declarator.name,
             annotation=self.annotation.generate_stub_node(stub_gen) if self.annotation else None,
@@ -1251,7 +1261,7 @@ class CSimpleBaseTypeNode(CBaseTypeNode):
             type = PyrexTypes.error_type
         return type
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         if self.name is None:
             # Unknown type
             name = stub_gen.require_any_type()
@@ -1451,7 +1461,7 @@ class TemplatedTypeNode(CBaseTypeNode):
 
         return modifiers
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return self.base_type_node.generate_stub_node(stub_gen)
 
 
@@ -1653,7 +1663,7 @@ class CVarDefNode(StatNode):
                 if Options.docstrings:
                     self.entry.doc = embed_position(self.pos, self.doc)
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         if self.visibility == "private":
             # Cannot be accessed
             return None
@@ -1987,7 +1997,7 @@ class CTypeDefNode(StatNode):
     def generate_execution_code(self, code):
         pass
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         # C typedefs are typically used for internal implementation
         return None
 
@@ -2737,10 +2747,10 @@ class FuncDefNode(StatNode, BlockNode):
             return None
         return slot.preprocessor_guard_code()
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return py_ast.FunctionDef(
             name=self.name,
-            args=self.generate_arguments(self.args),
+            args=self.generate_arguments(self.args, stub_gen),
             body=[
                 py_ast.Expr(py_ast.Constant(self.doc))
                 if self.doc
@@ -3203,7 +3213,7 @@ class CFuncDefNode(FuncDefNode):
             return f"#if {self.c_compile_guard}"
         return super_guard
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         # cdef functions are not accessible from Python
         return None
 
@@ -3229,7 +3239,7 @@ class DecoratorNode(Node):
     # decorator    ExprNode
     child_attrs = ['decorator']
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return self.decorator.generate_stub_node(stub_gen)
 
 
@@ -3821,10 +3831,10 @@ class DefNode(FuncDefNode):
     def generate_argument_type_tests(self, code):
         pass
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return py_ast.FunctionDef(
             name=self.name,
-            args=self.generate_arguments(self.args),
+            args=self.generate_arguments(self.args, stub_gen),
             body=[
                 py_ast.Expr(py_ast.Constant(self.doc))
                 if self.doc
@@ -5492,8 +5502,8 @@ class PyClassDefNode(ClassDefNode):
             self.bases.free_temps(code)
         code.pyclass_stack.pop()
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
-        body = self.body.generate_stub_asts(stub_gen)
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        body = self.body.generate_stub_nodes(stub_gen)
 
         if self.doc:
             body.insert(0, py_ast.Expr(py_ast.Constant(self.doc)))
@@ -6124,8 +6134,8 @@ class CClassDefNode(ClassDefNode):
         if self.body:
             self.body.annotate(code)
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
-        body = self.body.generate_stub_asts(stub_gen)
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        body = self.body.generate_stub_nodes(stub_gen)
 
         if self.doc:
             body.insert(0, py_ast.Expr(py_ast.Constant(self.doc)))
@@ -6140,10 +6150,6 @@ class CClassDefNode(ClassDefNode):
             body=body,
             decorator_list=[],
         )
-
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
-        print(self)
-
 
 class PropertyNode(StatNode):
     #  Definition of a property in an extension type.
@@ -6310,7 +6316,7 @@ class ExprStatNode(StatNode):
     def annotate(self, code):
         self.expr.annotate(code)
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return None
 
 
@@ -6672,7 +6678,7 @@ class SingleAssignmentNode(AssignmentNode):
         self.lhs.annotate(code)
         self.rhs.annotate(code)
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return py_ast.Assign(
             targets=[py_ast.Name(id=self.lhs.name, ctx=py_ast.Store())],
             value=py_ast.Ellipsis(),
@@ -9492,7 +9498,7 @@ class CImportStatNode(StatNode):
         if self.module_name == "numpy":
             cimport_numpy_check(self, code)
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         # Imports from C are only used for internal implementation
         return None
 
@@ -9580,7 +9586,7 @@ class FromCImportStatNode(StatNode):
         if self.module_name == "numpy":
             cimport_numpy_check(self, code)
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         if self.module_name == 'libc.stdint':
             # Create integer types alias
             return py_ast.Assign(
@@ -9702,7 +9708,7 @@ class FromImportStatNode(StatNode):
         self.module.generate_disposal_code(code)
         self.module.free_temps(code)
 
-    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return self.module.generate_stub_node(stub_gen)
 
 
