@@ -1,4 +1,5 @@
 import ast
+import json
 
 from Cython.Build.Stubs import StubGenerator
 from Cython.Compiler.Nodes import StatListNode, Node
@@ -7,7 +8,7 @@ from Cython.Compiler.Visitor import VisitorTransform
 import sys
 from ast import unparse
 import ast as py_ast
-
+import pprint
 
 def parse_cython_code(code: str):
     # Parse the code into a TreeFragment
@@ -35,6 +36,22 @@ class SimpleASTPrinter(VisitorTransform):
         return node
 
 
+def deep_print(obj, indent=0):
+    padding = '  ' * indent
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            print(f"{padding}{k}:")
+            deep_print(v, indent + 1)
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            print(f"{padding}[{i}]:")
+            deep_print(item, indent + 1)
+    elif hasattr(obj, '__dict__'):
+        print(f"{padding}{obj.__class__.__name__}:")
+        deep_print(vars(obj), indent + 1)
+    else:
+        print(f"{padding}{repr(obj)}")
+
 if __name__ == "__main__":  # TODO Merge to a utility argument
     if len(sys.argv) != 3:
         print("Usage: python parse_cython_ast.py <file.pyx> <file.pyi>")
@@ -48,8 +65,10 @@ if __name__ == "__main__":  # TODO Merge to a utility argument
 
     tree = parse_cython_code(code)
     #SimpleASTPrinter().visit(tree.root)
-    stub_ast = tree.generate_stubs(StubGenerator(error_on_missing_implementation=True))
-    print(ast.dump(stub_ast, indent=2))
+    deep_print(tree.root)
+
+    #stub_ast = tree.generate_stubs(StubGenerator(error_on_missing_implementation=True))
+    #print(ast.dump(stub_ast, indent=2))
 
     #SimpleASTPrinter().visit(stub_ast.root)
     #stub_ast = ast.fix_missing_locations(stub_ast)

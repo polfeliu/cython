@@ -257,7 +257,7 @@ class Node:
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         """Generate a Python AST stub node for this Cython node."""
-        error = f"Conversion to pyi stub not implemented for node {type(self).__name__} on {self.pos[1]}:{self.pos[2]}"
+        error = f"Conversion to pyi stub not implemented for node {type(self).__name__}"
         if stub_gen.error_on_missing_implementation:
             raise NotImplementedError(error)
         else:
@@ -3226,6 +3226,7 @@ class CFuncDefNode(FuncDefNode):
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         # cdef functions are not accessible from Python
+        # cpdef functions are accessible from Python, but is not implemented for stubs yet
         return None
 
 

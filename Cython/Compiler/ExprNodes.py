@@ -2951,7 +2951,7 @@ class ImportNode(ExprNode):
                 py_ast.alias(name=name.value)
                 for name in self.name_list.args
             ],
-            level=self.level
+            level=self.level if self.level is not None else 0,
         )
 
 class ScopedExprNode(ExprNode):
