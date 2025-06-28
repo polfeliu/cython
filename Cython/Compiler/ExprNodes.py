@@ -1351,7 +1351,7 @@ class NoneNode(PyConstNode):
             error(self.pos, "Cannot assign None to %s" % dst_type)
         return super().coerce_to(dst_type, env)
 
-    def generate_stub_node(self) -> Optional[py_ast.AST]:
+    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         return py_ast.Constant(value=None)
 
 
@@ -1942,7 +1942,7 @@ class UnicodeNode(ConstNode):
     def compile_time_value(self, denv):
         return self.value
 
-    def generate_stub_node(self) -> Optional[py_ast.AST]:
+    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         return py_ast.Constant(self.constant_result)
 
 
@@ -2818,7 +2818,7 @@ class NameNode(AtomicExprNode):
             return self.entry.known_standard_library_import
         return None
 
-    def generate_stub_node(self) -> Optional[py_ast.AST]:
+    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         return py_ast.Name(self.name)
 
 class BackquoteNode(ExprNode):
@@ -2941,7 +2941,7 @@ class ImportNode(ExprNode):
     def get_known_standard_library_import(self):
         return self.module_name.value
 
-    def generate_stub_node(self) -> Optional[py_ast.AST]:
+    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         return py_ast.ImportFrom(
             module=self.module_name.value,
             names=[
@@ -4859,10 +4859,10 @@ class IndexNode(_IndexingBaseNode):
         self.generate_subexpr_disposal_code(code)
         self.free_subexpr_temps(code)
 
-    def generate_stub_node(self) -> Optional[py_ast.AST]:
+    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         return py_ast.Subscript(
-            value=self.base.generate_stub_node(),
-            slice=self.index.generate_stub_node(),
+            value=self.base.generate_stub_node(stub_gen),
+            slice=self.index.generate_stub_node(stub_gen),
         )
 
 class BufferIndexNode(_IndexingBaseNode):
@@ -8278,9 +8278,9 @@ class AttributeNode(ExprNode):
             return StringEncoding.EncodedString("%s.%s" % (module_name, self.attribute))
         return None
 
-    def generate_stub_node(self) -> Optional[py_ast.AST]:
+    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         return py_ast.Attribute(
-            value=self.obj.generate_stub_node(),
+            value=self.obj.generate_stub_node(stub_gen),
             attr=self.attribute,
         )
 
@@ -9056,9 +9056,9 @@ class TupleNode(SequenceNode):
             self.type.entry.used = True
             self.generate_sequence_packing_code(code)
 
-    def generate_stub_node(self) -> Optional[py_ast.AST]:
+    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         return py_ast.Tuple(
-            elts=[arg.generate_stub_node() for arg in self.args],
+            elts=[arg.generate_stub_node(stub_gen) for arg in self.args],
         )
 
 
@@ -9219,9 +9219,9 @@ class ListNode(SequenceNode):
         else:
             raise InternalError("List type never specified")
 
-    def generate_stub_node(self) -> Optional[py_ast.AST]:
+    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         return py_ast.List(
-            elts=[arg.generate_stub_node() for arg in self.args],
+            elts=[arg.generate_stub_node(stub_gen) for arg in self.args],
         )
 
 
@@ -15242,8 +15242,8 @@ class AnnotationNode(ExprNode):
 
         return modifiers, arg_type
 
-    def generate_stub_node(self) -> Optional[py_ast.AST]:
-        return self.expr.generate_stub_node()
+    def generate_stub_asts(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+        return self.expr.generate_stub_node(stub_gen)
 
 class AssignmentExpressionNode(ExprNode):
     """

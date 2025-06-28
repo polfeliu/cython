@@ -19,6 +19,8 @@ from .ExprNodes import NameNode
 from . import Parsing
 from . import Main
 from . import UtilNodes
+import ast as py_ast
+from ..Build.Stubs import StubGenerator
 
 
 class StringParseContext(Main.Context):
@@ -265,6 +267,13 @@ class TreeFragment:
         return TemplateTransform()(self.root,
                                    substitutions = nodes,
                                    temps = self.temps + temps, pos = pos)
+
+    def generate_stubs(self):
+        """ Generate stub ASTs from the tree fragment."""
+        stub_gen = StubGenerator()
+        module = py_ast.Module(body=self.root.generate_stub_asts(stub_gen), type_ignores=[])
+        module = py_ast.fix_missing_locations(module)
+        return module
 
 
 class SetPosTransform(VisitorTransform):
