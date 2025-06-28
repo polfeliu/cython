@@ -257,13 +257,24 @@ class Node:
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         """Generate a Python AST stub node for this Cython node."""
-        error = f"Conversion to pyi stub not implemented for node {type(self).__name__}"
+        error = f"Conversion to pyi stub not implemented for node {type(self).__name__} on {self.pos[1]}:{self.pos[2]}"
         if stub_gen.error_on_missing_implementation:
             raise NotImplementedError(error)
         else:
             warning(self.pos, error, 1)
             return None
 
+    def collect_child_stub_nodes(self, childs: Optional[list], stub_gen: "StubGenerator") -> list[py_ast.AST]:
+        if childs is None:
+            return []
+
+        stubs = []
+        for child in childs:
+            stub = child.generate_stub_node(stub_gen)
+            if stub is not None:
+                stubs.append(stub)
+
+        return stubs
 
     def generate_stub_nodes(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         """Generate list of Python AST nodes for this Cython node."""
@@ -3240,7 +3251,17 @@ class DecoratorNode(Node):
     child_attrs = ['decorator']
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
-        return self.decorator.generate_stub_node(stub_gen)
+        #if isinstance(self.decorator, ExprNodes.SimpleCallNode):
+        #
+        a =  self.decorator.generate_stub_node(stub_gen)
+        if isinstance(a, py_ast.Call):
+            if isinstance(a.func, py_ast.Attribute):
+                if isinstance(a.func.value, py_ast.Name):
+                    if a.func.value.id == 'cython':
+                        # Cython decorators are only relevant in compile time
+                        return None
+
+        return a
 
 
 class DefNode(FuncDefNode):
@@ -3840,10 +3861,7 @@ class DefNode(FuncDefNode):
                 if self.doc
                 else py_ast.Ellipsis(),
             ],
-            decorator_list=[
-                decorator.generate_stub_node(stub_gen)
-                for decorator in self.decorators
-            ] if self.decorators else [],
+            decorator_list=self.collect_child_stub_nodes(self.decorators, stub_gen),
             returns=self.return_type_annotation.generate_stub_node(stub_gen)
             if self.return_type_annotation
             else None,

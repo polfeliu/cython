@@ -1,5 +1,6 @@
 import ast
 
+from Cython.Build.Stubs import StubGenerator
 from Cython.Compiler.Nodes import StatListNode, Node
 from Cython.Compiler.TreeFragment import TreeFragment
 from Cython.Compiler.Visitor import VisitorTransform
@@ -11,7 +12,7 @@ import ast as py_ast
 def parse_cython_code(code: str):
     # Parse the code into a TreeFragment
     fragment = TreeFragment(code)
-    return fragment.root
+    return fragment
 
 
 class SimpleASTPrinter(VisitorTransform):
@@ -46,10 +47,13 @@ if __name__ == "__main__":  # TODO Merge to a utility argument
         code = f.read()
 
     tree = parse_cython_code(code)
-    # SimpleASTPrinter().visit(tree)
-    stub_ast = py_ast.Module(body=tree.generate_stub_asts(), type_ignores=[])
-    stub_ast = ast.fix_missing_locations(stub_ast)
-    unparsed = unparse(stub_ast)
+    #SimpleASTPrinter().visit(tree.root)
+    stub_ast = tree.generate_stubs(StubGenerator(error_on_missing_implementation=True))
+    print(ast.dump(stub_ast, indent=2))
 
-    with open(output, "w") as f:
-        f.write(unparsed)
+    #SimpleASTPrinter().visit(stub_ast.root)
+    #stub_ast = ast.fix_missing_locations(stub_ast)
+    #unparsed = unparse(stub_ast)
+
+    #with open(output, "w") as f:
+    #    f.write(unparsed)

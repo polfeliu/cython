@@ -1469,6 +1469,9 @@ class BoolNode(ConstNode):
             return BoolNode(self.pos, value=self.value)
         return ConstNode.coerce_to(self, dst_type, env)
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return py_ast.Constant(value=self.value)
+
 
 class NullNode(ConstNode):
     type = PyrexTypes.c_null_ptr_type
@@ -6688,6 +6691,13 @@ class SimpleCallNode(CallNode):
                     self.generate_gotref(code)
             if self.has_optional_args:
                 code.funcstate.release_temp(self.opt_arg_struct)
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return py_ast.Call(
+            func=self.function.generate_stub_node(stub_gen),
+            args=[arg.generate_stub_node(stub_gen) for arg in self.args],
+            keywords=[],
+        )
 
 
 class NumPyMethodCallNode(ExprNode):
