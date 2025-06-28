@@ -1275,11 +1275,21 @@ class CSimpleBaseTypeNode(CBaseTypeNode):
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         if self.name is None:
             # Unknown type
-            name = stub_gen.require_any_type()
+            return stub_gen.require_import('typing', 'Any')
         else:
             # Name of the type
-            name = self.name
-        return py_ast.Name(name)
+            if not self.module_path:
+                return py_ast.Name(self.name)
+
+            stub = None
+
+            for module_path in self.module_path:
+                stub = py_ast.Attribute(
+                    value=stub if stub else py_ast.Name(id=module_path),
+                    attr=self.name
+                )
+
+            return stub
 
 class MemoryViewSliceTypeNode(CBaseTypeNode):
 
@@ -1543,6 +1553,24 @@ class FusedTypeNode(CBaseTypeNode):
         #     return types[0]
 
         return PyrexTypes.FusedType(types, name=self.name)
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+
+        # Create union of all types
+        return py_ast.Assign(
+            targets=[
+                py_ast.Name(self.name, ctx=py_ast.Store())
+            ],
+            value=py_ast.Subscript(
+                value=stub_gen.require_import('typing', 'Union'),
+                slice=py_ast.Tuple(
+                    elts=[
+                        type_node.generate_stub_node(stub_gen)
+                        for type_node in self.types
+                    ]
+                )
+            )
+        )
 
 
 class CConstOrVolatileTypeNode(CBaseTypeNode):
@@ -2010,7 +2038,12 @@ class CTypeDefNode(StatNode):
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         # C typedefs are typically used for internal implementation
-        return None
+        return py_ast.Assign(
+            targets=[
+                self.declarator.generate_stub_node(stub_gen)
+            ],
+            value=self.base_type.generate_stub_node(stub_gen)
+        )
 
 
 class FuncDefNode(StatNode, BlockNode):
@@ -3254,15 +3287,15 @@ class DecoratorNode(Node):
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         #if isinstance(self.decorator, ExprNodes.SimpleCallNode):
         #
-        a =  self.decorator.generate_stub_node(stub_gen)
-        if isinstance(a, py_ast.Call):
-            if isinstance(a.func, py_ast.Attribute):
-                if isinstance(a.func.value, py_ast.Name):
-                    if a.func.value.id == 'cython':
+        stub =  self.decorator.generate_stub_node(stub_gen)
+        if isinstance(stub, py_ast.Call):
+            if isinstance(stub.func, py_ast.Attribute):
+                if isinstance(stub.func.value, py_ast.Name):
+                    if stub.func.value.id == 'cython':
                         # Cython decorators are only relevant in compile time
                         return None
 
-        return a
+        return stub
 
 
 class DefNode(FuncDefNode):

@@ -1,5 +1,5 @@
 from ast import unparse
-
+import ast as py_ast
 
 class StubGenerator:
 
@@ -7,9 +7,9 @@ class StubGenerator:
         self.error_on_missing_implementation = error_on_missing_implementation
         self.__required_imports = {
             # Library path -> {names}
-        }
+        } # TODO Render imports on start of the file
 
-    def require_import(self, library_path: str, name: str) -> str:
+    def require_import(self, library_path: str, name: str) -> py_ast.Name:
         """
         Ensure that a library is imported in the generated stubs.
 
@@ -21,10 +21,7 @@ class StubGenerator:
         if name not in self.__required_imports[library_path]:
             self.__required_imports[library_path].add(name)
 
-        return name
-
-    def require_any_type(self) -> str:
-        return self.require_import('typing', 'Any')
+        return py_ast.Name(name)
 
 
 def write_stubs_to_file(stub_asts, output_file: str):  # TODO Move
