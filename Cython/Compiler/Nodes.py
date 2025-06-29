@@ -284,7 +284,7 @@ class Node:
         return [child]
 
     @staticmethod
-    def generate_arguments(arguments: list[Union["CArgDeclNode", "PyArgDeclNode"]], stub_gen: StubGenerator) -> py_ast.arguments:
+    def generate_stub_arguments(arguments: list[Union["CArgDeclNode", "PyArgDeclNode"]], stub_gen: StubGenerator) -> py_ast.arguments:
         args = []
         for argument in arguments:
             if isinstance(argument, CArgDeclNode):
@@ -2801,7 +2801,7 @@ class FuncDefNode(StatNode, BlockNode):
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return py_ast.FunctionDef(
             name=self.name,
-            args=self.generate_arguments(self.args, stub_gen),
+            args=self.generate_stub_arguments(self.args, stub_gen),
             body=[
                 py_ast.Expr(py_ast.Constant(self.doc))
                 if self.doc
@@ -3896,7 +3896,7 @@ class DefNode(FuncDefNode):
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         return py_ast.FunctionDef(
             name=self.name,
-            args=self.generate_arguments(self.args, stub_gen),
+            args=self.generate_stub_arguments(self.args, stub_gen),
             body=[
                 py_ast.Expr(py_ast.Constant(self.doc))
                 if self.doc
@@ -6238,6 +6238,21 @@ class PropertyNode(StatNode):
 
     def annotate(self, code):
         self.body.annotate(code)
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        # Empty arguments
+        args = self.generate_stub_arguments([], stub_gen)
+        # Add self
+        args.args.insert(0, py_ast.arg(arg='self', annotation=None, type_comment=None))
+
+        return py_ast.FunctionDef(
+            name=self.name,
+            args=args,
+            body=[py_ast.Ellipsis()],
+            decorator_list=[py_ast.Name(id='property', ctx=py_ast.Load())],
+            returns=None,
+            type_comment=None
+        )
 
 
 class CPropertyNode(StatNode):

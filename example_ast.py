@@ -1,1 +1,4 @@
-cache: CacheFacade | None = None,
+class ex:
+    @property
+    def asdf():
+        pass
