@@ -12391,6 +12391,24 @@ class BinopNode(ExprNode):
                     self.operand2.type))
         self.type = PyrexTypes.error_type
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        op = {
+            BitwiseOrNode: py_ast.BitOr,
+            AddNode: py_ast.Add,
+            SubNode: py_ast.Sub,
+            MulNode: py_ast.Mult,
+            DivNode: py_ast.Div,
+            ModNode: py_ast.Mod,
+            PowNode: py_ast.Pow,
+            MatMultNode: py_ast.MatMult,
+        }[type(self)]()
+
+        return py_ast.BinOp(
+            left=self.operand1.generate_stub_node(stub_gen),
+            op=op,
+            right=self.operand2.generate_stub_node(stub_gen),
+        )
+
 
 class CBinopNode(BinopNode):
 
@@ -12581,6 +12599,8 @@ class IntBinopNode(NumBinopNode):
         #print "IntBinopNode.c_types_okay:", type1, type2 ###
         return (type1.is_int or type1.is_enum) \
             and (type2.is_int or type2.is_enum)
+
+
 
 
 class BitwiseOrNode(IntBinopNode):

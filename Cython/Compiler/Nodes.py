@@ -1776,6 +1776,9 @@ class CStructOrUnionDefNode(StatNode):
     def generate_execution_code(self, code):
         pass
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return None
+
 
 class CppClassNode(CStructOrUnionDefNode, BlockNode):
 
@@ -1959,6 +1962,10 @@ class CEnumDefNode(StatNode):
                 code.error_goto(item.pos)))
             code.put_decref_clear(temp, PyrexTypes.py_object_type)
         code.funcstate.release_temp(temp)
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        # C Enums are not acessible from python
+        return None
 
 
 class CEnumDefItemNode(StatNode):
@@ -6189,13 +6196,15 @@ class CClassDefNode(ClassDefNode):
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         body = self.body.generate_stub_nodes(stub_gen)
 
+        body= [func for func in body if not (isinstance(func, py_ast.FunctionDef) and func.name == "__cinit__")]
+
         if self.doc:
             body.insert(0, py_ast.Expr(py_ast.Constant(self.doc)))
 
         return py_ast.ClassDef(
             name=self.as_name,
             bases=[
-                py_ast.Name(id=self.bases.args[0].name, ctx=py_ast.Load())
+                base.generate_stub_node(stub_gen)
                 for base in self.bases.args
             ],
             keywords=[],
@@ -7128,6 +7137,9 @@ class DelStatNode(StatNode):
         for arg in self.args:
             arg.annotate(code)
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return None
+
 
 class PassStatNode(StatNode):
     #  pass statement
@@ -7140,6 +7152,9 @@ class PassStatNode(StatNode):
     def generate_execution_code(self, code):
         if code.globalstate.directives['linetrace']:
             code.mark_pos(self.pos)
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return py_ast.Pass()
 
 
 class IndirectionNode(StatListNode):
@@ -7505,6 +7520,9 @@ class AssertStatNode(StatNode):
         self.condition.annotate(code)
         self.exception.annotate(code)
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return None
+
 
 class IfStatNode(StatNode):
     #  if statement
@@ -7552,6 +7570,10 @@ class IfStatNode(StatNode):
             if_clause.annotate(code)
         if self.else_clause:
             self.else_clause.annotate(code)
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        # In terms of typing assume the if statement is always successful
+        return self.if_clauses[0].body.generate_stub_node(stub_gen) if self.if_clauses else None
 
 
 class IfClauseNode(Node):
