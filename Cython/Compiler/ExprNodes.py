@@ -7450,6 +7450,17 @@ class GeneralCallNode(CallNode):
                 code.error_goto_if_null(self.result(), self.pos)))
         self.generate_gotref(code)
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        keywords = []
+        for key, word in self.keyword_args.key_value_pairs:
+            keywords.append(py_ast.keyword(arg=key.value, value=word.generate_stub_node(stub_gen)))
+
+        return py_ast.Call(
+            func=self.function.generate_stub_node(stub_gen),
+            args=[arg.generate_stub_node(stub_gen) for arg in self.positional_args.args],
+            keywords=keywords
+        )
+
 
 class AsTupleNode(ExprNode):
     #  Convert argument to tuple. Used for normalising
@@ -11287,6 +11298,17 @@ class UnopNode(ExprNode):
             self.type_error()
             return
         self.type = cpp_type
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        op = {
+            NotNode: py_ast.Not
+            # TODO More
+        }[type(self)]()
+
+        return py_ast.UnaryOp(
+            op=op,
+            operand=self.operand.generate_stub_node(stub_gen),
+        )
 
 
 class NotNode(UnopNode):

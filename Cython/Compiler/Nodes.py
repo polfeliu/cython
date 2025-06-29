@@ -8581,6 +8581,11 @@ class TryExceptStatNode(StatNode):
         if self.else_clause:
             self.else_clause.annotate(code)
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        # In terms of typing assume the try block is always successful
+        return self.body.generate_stub_nodes(stub_gen)
+
+
 
 class ExceptClauseNode(Node):
     #  Part of try ... except statement.

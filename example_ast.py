@@ -1,1 +1,3 @@
-asdf.np.uint8_t
+@pytest.mark.skipif(not supportsMemoryPool(), reason='Requires mempool operations')
+def asdf():
+    pass
