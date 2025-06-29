@@ -481,7 +481,7 @@ class StatListNode(Node):
     def generate_stub_nodes(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         py_nodes = []
         for node in self.stats:
-            if isinstance(node, StatListNode):
+            if isinstance(node, (StatListNode, TryExceptStatNode)):
                 py_nodes.extend(node.generate_stub_nodes(stub_gen))
             else:
                 py_stub = node.generate_stub_node(stub_gen)
@@ -8603,7 +8603,7 @@ class TryExceptStatNode(StatNode):
         if self.else_clause:
             self.else_clause.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_nodes(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         # In terms of typing assume the try block is always successful
         return self.body.generate_stub_nodes(stub_gen)
 

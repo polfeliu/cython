@@ -31,7 +31,6 @@ def write_stubs_to_file(stub_asts, output_file: str):  # TODO Move
     :param stub_asts: A list of AST nodes representing the generated stubs.
     :param output_file: The file path where the stubs should be written.
     """
-
     # Unparse the AST to source code
     unparsed_code = unparse(stub_asts)
 
