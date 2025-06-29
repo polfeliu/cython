@@ -1,4 +1,1 @@
-class ex:
-    @property
-    def asdf():
-        pass
+npt.NDArray[np.float64]

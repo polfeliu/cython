@@ -15295,6 +15295,17 @@ class AnnotationNode(ExprNode):
         return modifiers, arg_type
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        if isinstance(self.expr, NameNode):
+            # Replace cython types like bint, double, ...
+            py_type = stub_gen.cython_to_python_type(self.expr.name)
+            if py_type is not None:
+                return py_ast.Name(py_type)
+        elif isinstance(self.expr, IndexNode):
+            # Handled numpy arrays indicated by double[:, :]
+            py_type = stub_gen.cython_to_python_type(self.expr.base.name)
+            if py_type is not None:
+                return stub_gen.generate_numpy_array_type(py_type)
+
         return self.expr.generate_stub_node(stub_gen)
 
 class AssignmentExpressionNode(ExprNode):

@@ -481,7 +481,7 @@ class StatListNode(Node):
     def generate_stub_nodes(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         py_nodes = []
         for node in self.stats:
-            if isinstance(node, (StatListNode, TryExceptStatNode)):
+            if isinstance(node, (StatListNode, TryExceptStatNode, IfStatNode)):
                 py_nodes.extend(node.generate_stub_nodes(stub_gen))
             else:
                 py_stub = node.generate_stub_node(stub_gen)
@@ -1327,6 +1327,8 @@ class MemoryViewSliceTypeNode(CBaseTypeNode):
             )
         )
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return stub_gen.require_import('typing', 'Any')
 
 class CNestedBaseTypeNode(CBaseTypeNode):
     # For C++ classes that live inside other C++ classes.
@@ -2045,12 +2047,7 @@ class CTypeDefNode(StatNode):
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         # C typedefs are typically used for internal implementation
-        return py_ast.Assign(
-            targets=[
-                self.declarator.generate_stub_node(stub_gen)
-            ],
-            value=self.base_type.generate_stub_node(stub_gen)
-        )
+        return None
 
 
 class FuncDefNode(StatNode, BlockNode):
@@ -7454,6 +7451,9 @@ class RaiseStatNode(StatNode):
         if self.cause:
             self.cause.annotate(code)
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return None
+
 
 class ReraiseStatNode(StatNode):
 
@@ -7586,9 +7586,9 @@ class IfStatNode(StatNode):
         if self.else_clause:
             self.else_clause.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_nodes(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
         # In terms of typing assume the if statement is always successful
-        return self.if_clauses[0].body.generate_stub_node(stub_gen) if self.if_clauses else None
+        return self.if_clauses[0].body.generate_stub_nodes(stub_gen) if self.if_clauses else None
 
 
 class IfClauseNode(Node):
@@ -7716,7 +7716,9 @@ class SwitchStatNode(StatNode):
 
 
 class LoopNode:
-    pass
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return None
 
 
 class WhileStatNode(LoopNode, StatNode):
@@ -8413,6 +8415,9 @@ class WithStatNode(StatNode):
 
         code.funcstate.release_temp(self.exit_var)
         code.putln('}')
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return None
 
 
 class WithTargetAssignmentStatNode(AssignmentNode):
