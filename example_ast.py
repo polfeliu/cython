@@ -1,1 +1,4 @@
-npt.NDArray[np.float64]
+{'name': 'preds',
+ 'type': 'dense',
+ 'description': 'Cluster in',
+ 'shape': '(n_samples, 1)'}

@@ -1,5 +1,6 @@
 import ast as py_ast
 from ast import unparse
+from typing import Optional
 
 cython_to_numpy_dtype = {
     # Integers
@@ -57,10 +58,12 @@ class StubGenerator:
     def require_numpy(self) -> None:
         """
         Mark that NumPy is required for the generated stubs.
-        """
-        self.__numpy_required = True
 
-    def cython_to_python_type(self, name: str) -> str:
+        This will include np and npt in the imports.
+        """
+        self.__numpy_required = True  # TODO
+
+    def cython_to_python_type(self, name: str) -> Optional[str]:
         if name in cython_to_numpy_dtype:
             self.require_numpy()
             return cython_to_numpy_dtype[name]

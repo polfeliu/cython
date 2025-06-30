@@ -1365,6 +1365,9 @@ class EllipsisNode(PyConstNode):
     def compile_time_value(self, denv):
         return Ellipsis
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return py_ast.Constant(value=py_ast.Ellipsis())
+
 
 class ConstNode(AtomicExprNode):
     # Abstract base type for literal constant nodes.
@@ -1423,6 +1426,9 @@ class ConstNode(AtomicExprNode):
             result = cls(pos, value=value, type=type, constant_result=constant_result)
 
         return result
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return py_ast.Constant(self.value)
 
 
 class BoolNode(ConstNode):
@@ -9836,6 +9842,11 @@ class DictNode(ExprNode):
         # (only works on DictNodes where the keys are ConstNodes or PyConstNode)
         return {key.value: value for key, value in self.key_value_pairs}
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return py_ast.Dict(
+            keys=[key.generate_stub_node(stub_gen) for key, _ in self.key_value_pairs],
+            values=[value.generate_stub_node(stub_gen) for _, value in self.key_value_pairs],
+        )
 
 class DictItemNode(ExprNode):
     # Represents a single item in a DictNode
@@ -15300,7 +15311,7 @@ class AnnotationNode(ExprNode):
             py_type = stub_gen.cython_to_python_type(self.expr.name)
             if py_type is not None:
                 return py_ast.Name(py_type)
-        elif isinstance(self.expr, IndexNode):
+        elif isinstance(self.expr, IndexNode) and isinstance(self.expr.base, NameNode):
             # Handled numpy arrays indicated by double[:, :]
             py_type = stub_gen.cython_to_python_type(self.expr.base.name)
             if py_type is not None:

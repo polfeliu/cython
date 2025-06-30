@@ -6191,7 +6191,10 @@ class CClassDefNode(ClassDefNode):
             self.body.annotate(code)
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
-        body = self.body.generate_stub_nodes(stub_gen)
+        if self.body:
+            body = self.body.generate_stub_nodes(stub_gen)
+        else:
+            body = []
 
         body= [func for func in body if not (isinstance(func, py_ast.FunctionDef) and func.name == "__cinit__")]
 
@@ -6306,6 +6309,9 @@ class GlobalNode(StatNode):
 
     def generate_execution_code(self, code):
         pass
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return None
 
 
 class NonlocalNode(StatNode):
@@ -6984,6 +6990,9 @@ class InPlaceAssignmentNode(AssignmentNode):
     def create_binop_node(self):
         from . import ExprNodes
         return ExprNodes.binop_node(self.pos, self.operator, self.lhs, self.rhs)
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return None
 
 
 class PrintStatNode(StatNode):
