@@ -1499,6 +1499,9 @@ class CComplexBaseTypeNode(CBaseTypeNode):
         _, type = self.declarator.analyse(base, env)
         return type
 
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return self.base_type.generate_stub_node(stub_gen)
+
 
 class CTupleBaseTypeNode(CBaseTypeNode):
     # components [CBaseTypeNode]
@@ -1516,6 +1519,15 @@ class CTupleBaseTypeNode(CBaseTypeNode):
         entry = env.declare_tuple_type(self.pos, component_types)
         entry.used = True
         return entry.type
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return py_ast.Subscript(
+            value=stub_gen.require_import('typing', 'Tuple'),
+            slice=py_ast.Tuple([
+                component.generate_stub_node(stub_gen)
+                for component in self.components
+            ])
+        )
 
 
 class FusedTypeNode(CBaseTypeNode):
@@ -6869,6 +6881,15 @@ class CascadedAssignmentNode(AssignmentNode):
             lhs.annotate(code)
             rhs.annotate(code)
         self.rhs.annotate(code)
+
+    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        return py_ast.Assign(
+            targets=[
+                element.generate_stub_node(stub_gen)
+                for element in self.lhs_list
+            ],
+            value=self.rhs.generate_stub_node(stub_gen)
+        )
 
 
 class ParallelAssignmentNode(AssignmentNode):
