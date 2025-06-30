@@ -83,11 +83,20 @@ class StubGenerator:
             ),
             slice=py_ast.Attribute(
                 value=py_ast.Name(id="np", ctx=py_ast.Load()),
-                attr="float64",
+                attr=base_type,
                 ctx=py_ast.Load()
             ),
             ctx=py_ast.Load()
         )
+
+    def convert_declarator_and_type(self, declarator, typ, stub_gen: "StubGenerator"):
+        from Cython.Compiler.Nodes import CArrayDeclaratorNode
+
+        if isinstance(declarator, CArrayDeclaratorNode):
+            return py_ast.Name(declarator.base.name), self.generate_numpy_array_type(typ.name)
+
+        return declarator.generate_stub_node(stub_gen), typ.generate_stub_node(stub_gen)
+
 
 
 def write_stubs_to_file(stub_asts, output_file: str):  # TODO Move

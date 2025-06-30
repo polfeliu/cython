@@ -710,7 +710,6 @@ class CArrayDeclaratorNode(CDeclaratorNode):
         array_type = PyrexTypes.c_array_type(base_type, size)
         return self.base.analyse(array_type, env, nonempty=nonempty, visibility=visibility, in_pxd=in_pxd)
 
-
 class CFuncDeclaratorNode(CDeclaratorNode):
     # base                      CDeclaratorNode
     # args                      [CArgDeclNode]
@@ -1723,27 +1722,24 @@ class CVarDefNode(StatNode):
         elif self.visibility == "extern":
             # Extern declarations are not included in the stub file.
             return None
-        elif self.visibility == "readonly":
-            return py_ast.AnnAssign(
-                target=py_ast.Name(id=self.declarators[0].name, ctx=py_ast.Store()),
-                annotation=py_ast.Subscript(
-                    value=py_ast.Name(id="Final", ctx=py_ast.Load()), # TODO Import
-                    slice=self.base_type.generate_stub_node(stub_gen),
-                    ctx=py_ast.Load(),
-                ),
-                value=None,
-                simple=1,
-            )
+        elif self.visibility in ["readonly", "public"]:
+            target, annotation = stub_gen.convert_declarator_and_type(self.declarators[0], self.base_type, stub_gen)
 
-        elif self.visibility == "public":
+            if self.visibility == "readonly":
+                annotation = py_ast.Subscript(
+                    value=stub_gen.require_import('typing', 'Final'),
+                    slice=annotation
+                )
+
             return py_ast.AnnAssign(
-                target=self.declarators[0].generate_stub_node(stub_gen),
-                annotation=self.base_type.generate_stub_node(stub_gen),
+                target=target,
+                annotation=annotation,
                 value=None,
                 simple=1,
             )
         else:
             raise NotImplementedError(self.visibility)
+
 
 
 class CStructOrUnionDefNode(StatNode):
