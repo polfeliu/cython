@@ -484,6 +484,7 @@ class StatListNode(Node):
             if isinstance(node, (StatListNode, TryExceptStatNode, IfStatNode)):
                 py_nodes.extend(node.generate_stub_nodes(stub_gen))
             else:
+                # TODO implement try except and warning
                 py_stub = node.generate_stub_node(stub_gen)
                 if py_stub is not None:
                     py_nodes.append(py_stub)
