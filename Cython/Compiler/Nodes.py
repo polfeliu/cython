@@ -6767,6 +6767,13 @@ class SingleAssignmentNode(AssignmentNode):
         self.rhs.annotate(code)
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        from .ExprNodes import ImportNode
+
+        if isinstance(self.rhs, ImportNode):
+            return py_ast.Import(
+                names=[py_ast.alias(self.lhs.name)]
+            )
+
         return py_ast.Assign(
             targets=[py_ast.Name(id=self.lhs.name, ctx=py_ast.Store())],
             value=py_ast.Ellipsis(),
