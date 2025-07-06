@@ -616,6 +616,7 @@ class CNameDeclaratorNode(CDeclaratorNode):
         return self, base_type
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        # TODO stdint types
         return py_ast.Name(id=self.name)
 
 
@@ -9721,6 +9722,7 @@ class FromCImportStatNode(StatNode):
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         if self.module_name == 'libc.stdint':
+            # TODO Filter
             # Create integer types alias
             return py_ast.Assign(
                 targets=[

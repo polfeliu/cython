@@ -2828,6 +2828,7 @@ class NameNode(AtomicExprNode):
         return None
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+        # TODO stdint types
         return py_ast.Name(self.name)
 
 class BackquoteNode(ExprNode):
@@ -5904,6 +5905,8 @@ class SliceIndexNode(ExprNode):
         # self.result() is not used, but this method must exist
         return "<unused>"
 
+    def generate_stub_node(self, asdf):
+        return py_ast.Name('asdf')
 
 class SliceNode(ExprNode):
     #  start:stop:step in subscript list
@@ -15311,10 +15314,20 @@ class AnnotationNode(ExprNode):
             py_type = stub_gen.cython_to_python_type(self.expr.name)
             if py_type is not None:
                 return py_ast.Name(py_type)
-        elif isinstance(self.expr, IndexNode) and isinstance(self.expr.base, NameNode):
-            # Handled numpy arrays indicated by double[:, :]
-            py_type = stub_gen.cython_to_python_type(self.expr.base.name)
-            if py_type is not None:
+        elif isinstance(self.expr, (IndexNode, SliceIndexNode)) and isinstance(self.expr.base, NameNode):
+            # Handled numpy arrays indicated by double[:, :] or double[:]
+            is_array = False
+            # Index node
+            if isinstance(self.expr, IndexNode):
+                if isinstance(self.expr.index, TupleNode):
+                    if isinstance(self.expr.index.args[0], SliceNode):
+                        is_array = True
+                else:
+                    raise NotImplementedError
+            elif isinstance(self.expr, SliceIndexNode):
+                is_array = True
+            if is_array:
+                py_type = stub_gen.cython_to_python_type(self.expr.base.name)
                 return stub_gen.generate_numpy_array_type(py_type)
 
         return self.expr.generate_stub_node(stub_gen)

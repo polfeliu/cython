@@ -11,7 +11,7 @@ cython_to_numpy_dtype = {
     "short": "int16",
     "unsigned short": "uint16",
 
-    "int": "int32",
+    # "int" Built-in python type
     "unsigned int": "uint32",
 
     "long": "int64",
@@ -21,7 +21,7 @@ cython_to_numpy_dtype = {
     "unsigned long long": "uint64",
 
     # Floating point
-    "float": "float32",
+    # "float" Built-in python type
     "double": "float64",
     "long double": "longdouble",
 
@@ -61,6 +61,7 @@ class StubGenerator:
 
         This will include np and npt in the imports.
         """
+        print("REQUIRING NUMPY")
         self.__numpy_required = True  # TODO
 
     def cython_to_python_type(self, name: str) -> Optional[str]:
@@ -71,7 +72,7 @@ class StubGenerator:
         if name == 'bint':
             return 'bool'
 
-        return None
+        return name
 
     def generate_numpy_array_type(self, base_type: str) -> py_ast.Subscript:
         self.require_numpy()
