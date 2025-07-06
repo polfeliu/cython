@@ -1,6 +1,1 @@
-import sys
-
-
-double[:, :]
-
-MyType[asdf]
+import numpy as np

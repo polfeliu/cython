@@ -6771,8 +6771,13 @@ class SingleAssignmentNode(AssignmentNode):
         from .ExprNodes import ImportNode
 
         if isinstance(self.rhs, ImportNode):
+            name = self.rhs.module_name.constant_result
+            asname = self.lhs.name
+            stub_gen.register_imported_symbol(stub_gen)
+            if name == asname:
+                asname = None
             return py_ast.Import(
-                names=[py_ast.alias(self.lhs.name)]
+                names=[py_ast.alias(name, asname)]
             )
 
         return py_ast.Assign(

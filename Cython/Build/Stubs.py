@@ -1,6 +1,6 @@
 import ast as py_ast
 from ast import unparse
-from typing import Optional
+from typing import Optional, Union
 
 cython_to_numpy_dtype = {
     # Integers
@@ -40,6 +40,7 @@ class StubGenerator:
         }  # TODO Render imports on start of the file
 
         self.__numpy_required = False
+        self.__imported_symbols = set()
 
     def require_import(self, library_path: str, name: str) -> py_ast.Name:
         """
@@ -55,38 +56,29 @@ class StubGenerator:
 
         return py_ast.Name(name)
 
-    def require_numpy(self) -> None:
-        """
-        Mark that NumPy is required for the generated stubs.
-
-        This will include np and npt in the imports.
-        """
-        print("REQUIRING NUMPY")
-        self.__numpy_required = True  # TODO
-
-    def cython_to_python_type(self, name: str) -> Optional[str]:
+    def cython_to_python_type(self, name: str) -> Union[None, py_ast.Attribute, py_ast.Name]:
         if name in cython_to_numpy_dtype:
-            self.require_numpy()
-            return cython_to_numpy_dtype[name]
+            nptype = cython_to_numpy_dtype[name]
+            self.require_import('np', nptype)
+            return py_ast.Attribute(
+                value='np',
+                attr=nptype
+            )
 
         if name == 'bint':
-            return 'bool'
+            return py_ast.Name('bool')
 
-        return name
+        return py_ast.Name(name)
 
-    def generate_numpy_array_type(self, base_type: str) -> py_ast.Subscript:
-        self.require_numpy()
+    def generate_numpy_array_type(self, base_type: py_ast.Attribute) -> py_ast.Subscript:
+        self.require_import('np')
         return py_ast.Subscript(
             value=py_ast.Attribute(
                 value=py_ast.Name(id="npt", ctx=py_ast.Load()),
                 attr="NDArray",
                 ctx=py_ast.Load()
             ),
-            slice=py_ast.Attribute(
-                value=py_ast.Name(id="np", ctx=py_ast.Load()),
-                attr=base_type,
-                ctx=py_ast.Load()
-            ),
+            slice=base_type,
             ctx=py_ast.Load()
         )
 
@@ -98,6 +90,8 @@ class StubGenerator:
 
         return declarator.generate_stub_node(stub_gen), typ.generate_stub_node(stub_gen)
 
+    def register_imported_symbol(self, symbol: str):
+        self.__imported_symbols.add(symbol)
 
 
 def write_stubs_to_file(stub_asts, output_file: str):  # TODO Move
