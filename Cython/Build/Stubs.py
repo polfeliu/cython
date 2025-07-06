@@ -1,6 +1,6 @@
 import ast as py_ast
 from ast import unparse
-from typing import Optional, Union
+from typing import Union
 
 cython_to_numpy_dtype = {
     # Integers
@@ -31,37 +31,44 @@ cython_to_numpy_dtype = {
 }
 
 
-class StubGenerator:
-
+class StubGenerationConfig:
     def __init__(self, error_on_missing_implementation: bool = False):
         self.error_on_missing_implementation = error_on_missing_implementation
+
+
+class FileStubGenerator:
+
+    def __init__(self, config: StubGenerationConfig):
+        self.config = config
         self.__required_imports = {
-            # Library path -> {names}
+            # Library path -> set(name, (name, asname), ...)
         }  # TODO Render imports on start of the file
 
         self.__numpy_required = False
         self.__imported_symbols = set()
 
-    def require_import(self, library_path: str, name: str) -> py_ast.Name:
+    def require_import(self, library_path: str, name: str, asname: str) -> py_ast.Name:
         """
         Ensure that a library is imported in the generated stubs.
 
         :param library_path: The path to the library to import.
         :param name: The name of the item to import.
+        :param asname: The alias to use for the imported item.
         """
         if library_path not in self.__required_imports:
             self.__required_imports[library_path] = set()
         if name not in self.__required_imports[library_path]:
-            self.__required_imports[library_path].add(name)
+            elem = (name, asname) if asname else name
+            self.__required_imports[library_path].add(elem)
 
-        return py_ast.Name(name)
+        return py_ast.Name(name if not asname else asname, ctx=py_ast.Load())
 
     def cython_to_python_type(self, name: str) -> Union[None, py_ast.Attribute, py_ast.Name]:
         if name in cython_to_numpy_dtype:
             nptype = cython_to_numpy_dtype[name]
-            self.require_import('np', nptype)
+
             return py_ast.Attribute(
-                value='np',
+                value=self.require_import(None, name='numpy', asname='np'),
                 attr=nptype
             )
 
@@ -71,10 +78,10 @@ class StubGenerator:
         return py_ast.Name(name)
 
     def generate_numpy_array_type(self, base_type: py_ast.Attribute) -> py_ast.Subscript:
-        self.require_import('np')
+
         return py_ast.Subscript(
             value=py_ast.Attribute(
-                value=py_ast.Name(id="npt", ctx=py_ast.Load()),
+                value=self.require_import('numpy', name='typing', asname='npt'),
                 attr="NDArray",
                 ctx=py_ast.Load()
             ),
@@ -92,6 +99,16 @@ class StubGenerator:
 
     def register_imported_symbol(self, symbol: str):
         self.__imported_symbols.add(symbol)
+
+    def inject_imports(self, stub_ast: py_ast.Module):
+        """
+        Inject the required imports into the given AST module.
+
+        :param stub_ast: The AST module to inject imports into.
+        :return: The modified AST module with imports injected.
+        """
+        # TODO
+        pass
 
 
 def write_stubs_to_file(stub_asts, output_file: str):  # TODO Move

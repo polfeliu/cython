@@ -20,7 +20,7 @@ from . import Parsing
 from . import Main
 from . import UtilNodes
 import ast as py_ast
-from ..Build.Stubs import StubGenerator
+from ..Build.Stubs import StubGenerationConfig, FileStubGenerator
 
 
 class StringParseContext(Main.Context):
@@ -268,11 +268,14 @@ class TreeFragment:
                                    substitutions = nodes,
                                    temps = self.temps + temps, pos = pos)
 
-    def generate_stubs(self, stub_gen: StubGenerator = None):
+    def generate_stubs(self, config: StubGenerationConfig = None):
         """ Generate stub ASTs from the tree fragment."""
-        if stub_gen is None:
-            stub_gen = StubGenerator()
+        if config is None:
+            config = StubGenerationConfig()
+
+        stub_gen = FileStubGenerator(config)
         module = py_ast.Module(body=self.root.generate_stub_nodes(stub_gen), type_ignores=[])
+        stub_gen.inject_imports(module)
         module = py_ast.fix_missing_locations(module)
         return module
 

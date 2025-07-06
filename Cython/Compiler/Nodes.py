@@ -4,7 +4,7 @@
 
 
 import cython
-from Cython.Build.Stubs import StubGenerator
+from Cython.Build.Stubs import FileStubGenerator
 
 cython.declare(os=object, copy=object, chain=object,
                Builtin=object, error=object, warning=object, Naming=object, PyrexTypes=object,
@@ -255,7 +255,7 @@ class Node:
         if isinstance(self, BlockNode):
             self.body.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         """Generate a Python AST stub node for this Cython node."""
         error = f"Conversion to pyi stub not implemented for node {type(self).__name__}"
         if stub_gen.error_on_missing_implementation:
@@ -264,7 +264,7 @@ class Node:
             warning(self.pos, error, 1)
             return None
 
-    def collect_child_stub_nodes(self, childs: Optional[list], stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def collect_child_stub_nodes(self, childs: Optional[list], stub_gen: "FileStubGenerator") -> list[py_ast.AST]:
         if childs is None:
             return []
 
@@ -276,7 +276,7 @@ class Node:
 
         return stubs
 
-    def generate_stub_nodes(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_nodes(self, stub_gen: "FileStubGenerator") -> list[py_ast.AST]:
         """Generate list of Python AST nodes for this Cython node."""
         child = self.generate_stub_node(stub_gen)
         if child is None:
@@ -284,7 +284,7 @@ class Node:
         return [child]
 
     @staticmethod
-    def generate_stub_arguments(arguments: list[Union["CArgDeclNode", "PyArgDeclNode"]], stub_gen: StubGenerator) -> py_ast.arguments:
+    def generate_stub_arguments(arguments: list[Union["CArgDeclNode", "PyArgDeclNode"]], stub_gen: FileStubGenerator) -> py_ast.arguments:
         args = []
         for argument in arguments:
             if isinstance(argument, CArgDeclNode):
@@ -423,7 +423,7 @@ class CompilerDirectivesNode(Node):
         self.body.annotate(code)
         code.globalstate.directives = old
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         # Compiler directives are not represented in the stub AST.
         return None
 
@@ -478,7 +478,7 @@ class StatListNode(Node):
         for stat in self.stats:
             stat.annotate(code)
 
-    def generate_stub_nodes(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_nodes(self, stub_gen: "FileStubGenerator") -> list[py_ast.AST]:
         py_nodes = []
         for node in self.stats:
             if isinstance(node, (StatListNode, TryExceptStatNode, IfStatNode)):
@@ -551,7 +551,7 @@ class CDefExternNode(StatNode):
     def annotate(self, code):
         self.body.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         # Externally imported C is not accessible from python
         return None
 
@@ -615,7 +615,7 @@ class CNameDeclaratorNode(CDeclaratorNode):
         self.type = base_type
         return self, base_type
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         # TODO stdint types
         return py_ast.Name(id=self.name)
 
@@ -1141,7 +1141,7 @@ class CArgDeclNode(Node):
         default.generate_post_assignment_code(code)
         default.free_temps(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return py_ast.arg(
             arg=self.declarator.name,
             annotation=self.annotation.generate_stub_node(stub_gen) if self.annotation else None,
@@ -1273,7 +1273,7 @@ class CSimpleBaseTypeNode(CBaseTypeNode):
             type = PyrexTypes.error_type
         return type
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         if self.name is None:
             # Unknown type
             return stub_gen.require_import('typing', 'Any')
@@ -1328,7 +1328,7 @@ class MemoryViewSliceTypeNode(CBaseTypeNode):
             )
         )
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return stub_gen.require_import('typing', 'Any')
 
 class CNestedBaseTypeNode(CBaseTypeNode):
@@ -1485,7 +1485,7 @@ class TemplatedTypeNode(CBaseTypeNode):
 
         return modifiers
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return self.base_type_node.generate_stub_node(stub_gen)
 
 
@@ -1500,7 +1500,7 @@ class CComplexBaseTypeNode(CBaseTypeNode):
         _, type = self.declarator.analyse(base, env)
         return type
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return self.base_type.generate_stub_node(stub_gen)
 
 
@@ -1521,7 +1521,7 @@ class CTupleBaseTypeNode(CBaseTypeNode):
         entry.used = True
         return entry.type
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return py_ast.Subscript(
             value=stub_gen.require_import('typing', 'Tuple'),
             slice=py_ast.Tuple([
@@ -1569,7 +1569,7 @@ class FusedTypeNode(CBaseTypeNode):
 
         return PyrexTypes.FusedType(types, name=self.name)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
 
         # Create union of all types
         return py_ast.Assign(
@@ -1717,7 +1717,7 @@ class CVarDefNode(StatNode):
                 if Options.docstrings:
                     self.entry.doc = embed_position(self.pos, self.doc)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         if self.visibility == "private":
             # Cannot be accessed
             return None
@@ -1788,7 +1788,7 @@ class CStructOrUnionDefNode(StatNode):
     def generate_execution_code(self, code):
         pass
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return None
 
 
@@ -1975,7 +1975,7 @@ class CEnumDefNode(StatNode):
             code.put_decref_clear(temp, PyrexTypes.py_object_type)
         code.funcstate.release_temp(temp)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         # C Enums are not acessible from python
         return None
 
@@ -2055,7 +2055,7 @@ class CTypeDefNode(StatNode):
     def generate_execution_code(self, code):
         pass
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         # C typedefs are typically used for internal implementation
         return None
 
@@ -2805,7 +2805,7 @@ class FuncDefNode(StatNode, BlockNode):
             return None
         return slot.preprocessor_guard_code()
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return py_ast.FunctionDef(
             name=self.name,
             args=self.generate_stub_arguments(self.args, stub_gen),
@@ -3271,7 +3271,7 @@ class CFuncDefNode(FuncDefNode):
             return f"#if {self.c_compile_guard}"
         return super_guard
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         # cdef functions are not accessible from Python
         # cpdef functions are accessible from Python, but is not implemented for stubs yet
         return None
@@ -3298,7 +3298,7 @@ class DecoratorNode(Node):
     # decorator    ExprNode
     child_attrs = ['decorator']
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         #if isinstance(self.decorator, ExprNodes.SimpleCallNode):
         #
         stub =  self.decorator.generate_stub_node(stub_gen)
@@ -3900,7 +3900,7 @@ class DefNode(FuncDefNode):
     def generate_argument_type_tests(self, code):
         pass
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return py_ast.FunctionDef(
             name=self.name,
             args=self.generate_stub_arguments(self.args, stub_gen),
@@ -5568,11 +5568,14 @@ class PyClassDefNode(ClassDefNode):
             self.bases.free_temps(code)
         code.pyclass_stack.pop()
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         body = self.body.generate_stub_nodes(stub_gen)
 
         if self.doc:
             body.insert(0, py_ast.Expr(py_ast.Constant(self.doc)))
+
+        if len(body) == 0:
+            body.append(py_ast.Ellipsis())
 
         return py_ast.ClassDef(
             name=self.name,
@@ -6200,7 +6203,7 @@ class CClassDefNode(ClassDefNode):
         if self.body:
             self.body.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         if self.body:
             body = self.body.generate_stub_nodes(stub_gen)
         else:
@@ -6210,6 +6213,9 @@ class CClassDefNode(ClassDefNode):
 
         if self.doc:
             body.insert(0, py_ast.Expr(py_ast.Constant(self.doc)))
+
+        if len(body) == 0:
+            body.append(py_ast.Ellipsis())
 
         return py_ast.ClassDef(
             name=self.as_name,
@@ -6249,7 +6255,7 @@ class PropertyNode(StatNode):
     def annotate(self, code):
         self.body.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         # Empty arguments
         args = self.generate_stub_arguments([], stub_gen)
         # Add self
@@ -6320,7 +6326,7 @@ class GlobalNode(StatNode):
     def generate_execution_code(self, code):
         pass
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return None
 
 
@@ -6405,7 +6411,7 @@ class ExprStatNode(StatNode):
     def annotate(self, code):
         self.expr.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return None
 
 
@@ -6767,8 +6773,8 @@ class SingleAssignmentNode(AssignmentNode):
         self.lhs.annotate(code)
         self.rhs.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
-        from .ExprNodes import ImportNode
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
+        from .ExprNodes import ImportNode, IndexNode
 
         if isinstance(self.rhs, ImportNode):
             name = self.rhs.module_name.constant_result
@@ -6779,6 +6785,10 @@ class SingleAssignmentNode(AssignmentNode):
             return py_ast.Import(
                 names=[py_ast.alias(name, asname)]
             )
+
+        if isinstance(self.lhs, IndexNode):
+            # Assignment to elements of a dictionary has no effects on typing
+            return None
 
         return py_ast.Assign(
             targets=[py_ast.Name(id=self.lhs.name, ctx=py_ast.Store())],
@@ -6892,7 +6902,7 @@ class CascadedAssignmentNode(AssignmentNode):
             rhs.annotate(code)
         self.rhs.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return py_ast.Assign(
             targets=[
                 element.generate_stub_node(stub_gen)
@@ -7022,7 +7032,7 @@ class InPlaceAssignmentNode(AssignmentNode):
         from . import ExprNodes
         return ExprNodes.binop_node(self.pos, self.operator, self.lhs, self.rhs)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return None
 
 
@@ -7189,7 +7199,7 @@ class DelStatNode(StatNode):
         for arg in self.args:
             arg.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return None
 
 
@@ -7205,7 +7215,7 @@ class PassStatNode(StatNode):
         if code.globalstate.directives['linetrace']:
             code.mark_pos(self.pos)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return py_ast.Pass()
 
 
@@ -7491,7 +7501,7 @@ class RaiseStatNode(StatNode):
         if self.cause:
             self.cause.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return None
 
 
@@ -7575,7 +7585,7 @@ class AssertStatNode(StatNode):
         self.condition.annotate(code)
         self.exception.annotate(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return None
 
 
@@ -7626,7 +7636,7 @@ class IfStatNode(StatNode):
         if self.else_clause:
             self.else_clause.annotate(code)
 
-    def generate_stub_nodes(self, stub_gen: "StubGenerator") -> list[py_ast.AST]:
+    def generate_stub_nodes(self, stub_gen: "FileStubGenerator") -> list[py_ast.AST]:
         # In terms of typing assume the if statement is always successful
         return self.if_clauses[0].body.generate_stub_nodes(stub_gen) if self.if_clauses else None
 
@@ -7757,7 +7767,7 @@ class SwitchStatNode(StatNode):
 
 class LoopNode:
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return None
 
 
@@ -8456,7 +8466,7 @@ class WithStatNode(StatNode):
         code.funcstate.release_temp(self.exit_var)
         code.putln('}')
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return None
 
 
@@ -8663,7 +8673,7 @@ class TryExceptStatNode(StatNode):
         if self.else_clause:
             self.else_clause.annotate(code)
 
-    def generate_stub_nodes(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_nodes(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         # In terms of typing assume the try block is always successful
         return self.body.generate_stub_nodes(stub_gen)
 
@@ -9637,7 +9647,7 @@ class CImportStatNode(StatNode):
         if self.module_name == "numpy":
             cimport_numpy_check(self, code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         # Imports from C are only used for internal implementation
         return None
 
@@ -9725,7 +9735,7 @@ class FromCImportStatNode(StatNode):
         if self.module_name == "numpy":
             cimport_numpy_check(self, code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         if self.module_name == 'libc.stdint':
             # TODO Filter
             # Create integer types alias
@@ -9848,7 +9858,7 @@ class FromImportStatNode(StatNode):
         self.module.generate_disposal_code(code)
         self.module.free_temps(code)
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         return self.module.generate_stub_node(stub_gen)
 
 
