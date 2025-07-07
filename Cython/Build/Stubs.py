@@ -1,6 +1,6 @@
 import ast as py_ast
 from ast import unparse
-from typing import Union, Iterator
+from typing import Union, Iterator, Optional
 
 cython_to_numpy_dtype = {
     # Integers
@@ -41,12 +41,12 @@ class FileStubGenerator:
     def __init__(self, config: StubGenerationConfig):
         self.config = config
         self._required_imports = {
-            # Library path -> set(name, (name, asname), ...)
+            # Library path -> set((name, asname), ...)
         }  # TODO Render imports on start of the file
 
         self._imported_symbols = set()
 
-    def require_import(self, library_path: str, name: str, asname: str) -> py_ast.Name:
+    def require_import(self, library_path: str, name: str, asname: Optional[str] = None) -> py_ast.Name:
         """
         Ensure that a library is imported in the generated stubs.
 
@@ -57,8 +57,7 @@ class FileStubGenerator:
         if library_path not in self._required_imports:
             self._required_imports[library_path] = set()
         if name not in self._required_imports[library_path]:
-            elem = (name, asname) if asname else name
-            self._required_imports[library_path].add(elem)
+            self._required_imports[library_path].add((name, asname))
 
         return py_ast.Name(name if not asname else asname, ctx=py_ast.Load())
 

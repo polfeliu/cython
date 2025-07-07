@@ -258,7 +258,7 @@ class Node:
     def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         """Generate a Python AST stub node for this Cython node."""
         error = f"Conversion to pyi stub not implemented for node {type(self).__name__}"
-        if stub_gen.error_on_missing_implementation:
+        if stub_gen.config.error_on_missing_implementation:
             raise NotImplementedError(error)
         else:
             warning(self.pos, error, 1)
@@ -284,7 +284,7 @@ class Node:
         return [child]
 
     @staticmethod
-    def generate_stub_arguments(arguments: list[Union["CArgDeclNode", "PyArgDeclNode"]], stub_gen: FileStubGenerator) -> py_ast.arguments:
+    def generate_stub_arguments(arguments: list["CArgDeclNode"], stub_gen: FileStubGenerator) -> py_ast.arguments:
         args = []
         for argument in arguments:
             if isinstance(argument, CArgDeclNode):
@@ -1142,9 +1142,20 @@ class CArgDeclNode(Node):
         default.free_temps(code)
 
     def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
+        if isinstance(self.declarator, (CPtrDeclaratorNode, CReferenceDeclaratorNode)):
+            # Pointer argument
+            arg = self.declarator.declared_name()
+            annotation = stub_gen.require_import('typing', 'Any')
+        else:
+            arg = self.declarator.name
+            annotation = self.annotation.generate_stub_node(stub_gen) if self.annotation else None
+            if annotation is None:
+                # Get annotation from C
+                annotation = self.base_type.generate_stub_node(stub_gen)
+
         return py_ast.arg(
-            arg=self.declarator.name,
-            annotation=self.annotation.generate_stub_node(stub_gen) if self.annotation else None,
+            arg=arg,
+            annotation=annotation,
             type_comment=None,
         )
 
@@ -1329,7 +1340,7 @@ class MemoryViewSliceTypeNode(CBaseTypeNode):
         )
 
     def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
-        return stub_gen.require_import('typing', 'Any')
+        return stub_gen.generate_numpy_array_type(stub_gen.cython_to_python_type(self.base_type_node.name))
 
 class CNestedBaseTypeNode(CBaseTypeNode):
     # For C++ classes that live inside other C++ classes.
@@ -1601,6 +1612,9 @@ class CConstOrVolatileTypeNode(CBaseTypeNode):
             error(self.pos,
                   "Const/volatile base type cannot be a Python object")
         return PyrexTypes.c_const_or_volatile_type(base, self.is_const, self.is_volatile)
+
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
+        return self.base_type.generate_stub_node(stub_gen)
 
 
 class CVarDefNode(StatNode):
@@ -6774,7 +6788,7 @@ class SingleAssignmentNode(AssignmentNode):
         self.rhs.annotate(code)
 
     def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
-        from .ExprNodes import ImportNode, IndexNode
+        from .ExprNodes import ImportNode, IndexNode, AttributeNode, TupleNode
 
         if isinstance(self.rhs, ImportNode):
             name = self.rhs.module_name.constant_result
@@ -6786,12 +6800,18 @@ class SingleAssignmentNode(AssignmentNode):
                 names=[py_ast.alias(name, asname)]
             )
 
-        if isinstance(self.lhs, IndexNode):
-            # Assignment to elements of a dictionary has no effects on typing
+        if isinstance(self.lhs, (IndexNode, AttributeNode)):
+            # Assignment to elements of a dictionary or attributes has no effects on typing
             return None
 
+        if isinstance(self.lhs, TupleNode):
+            # Multiple targets
+            targets = [arg.generate_stub_node(stub_gen) for arg in self.lhs.args]
+        else:
+            targets = [self.lhs.generate_stub_node(stub_gen)]
+
         return py_ast.Assign(
-            targets=[py_ast.Name(id=self.lhs.name, ctx=py_ast.Store())],
+            targets=targets,
             value=py_ast.Ellipsis(),
         )
 

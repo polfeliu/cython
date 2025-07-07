@@ -15317,8 +15317,8 @@ class AnnotationNode(ExprNode):
                 if isinstance(self.expr.index, TupleNode):
                     if isinstance(self.expr.index.args[0], SliceNode):
                         is_array = True
-                else:
-                    raise NotImplementedError
+                elif isinstance(self.expr.index, SliceNode):
+                    is_array = True
             elif isinstance(self.expr, SliceIndexNode):
                 is_array = True
             if is_array:
