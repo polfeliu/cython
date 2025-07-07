@@ -1340,7 +1340,11 @@ class MemoryViewSliceTypeNode(CBaseTypeNode):
         )
 
     def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
-        return stub_gen.generate_numpy_array_type(stub_gen.cython_to_python_type(self.base_type_node.name))
+        if isinstance(self.base_type_node, CConstOrVolatileTypeNode):
+            typ = self.base_type_node.base_type.name
+        else:
+            typ = self.base_type_node.name
+        return stub_gen.generate_numpy_array_type(stub_gen.cython_to_python_type(typ))
 
 class CNestedBaseTypeNode(CBaseTypeNode):
     # For C++ classes that live inside other C++ classes.

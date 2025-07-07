@@ -7,15 +7,23 @@ cython_to_numpy_dtype = {
     "char": "int8",
     "signed char": "int8",
     "unsigned char": "uint8",
+    "int8_t": "int8",
+    "uint8_t": "uint8",
 
     "short": "int16",
     "unsigned short": "uint16",
+    "int16_t": "int16",
+    "uint16_t": "uint16",
 
     # "int" Built-in python type
     "unsigned int": "uint32",
+    "int32_t": "int32",
+    "uint32_t": "uint32",
 
     "long": "int64",
     "unsigned long": "uint64",
+    "int64_t": "int64",
+    "uint64_t": "uint64",
 
     "long long": "int64",
     "unsigned long long": "uint64",
@@ -75,7 +83,9 @@ class FileStubGenerator:
 
         return py_ast.Name(name)
 
-    def generate_numpy_array_type(self, base_type: py_ast.Attribute) -> py_ast.Subscript:
+    def generate_numpy_array_type(self, base_type: Union[py_ast.Attribute, str]) -> py_ast.Subscript:
+        if isinstance(base_type, str):
+            base_type = self.cython_to_python_type(base_type)
         return py_ast.Subscript(
             value=py_ast.Attribute(
                 value=self.require_import('numpy', name='typing', asname='npt'),
