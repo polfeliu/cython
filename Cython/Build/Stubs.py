@@ -1,6 +1,6 @@
 import ast as py_ast
 from ast import unparse
-from typing import Union
+from typing import Union, Iterator
 
 cython_to_numpy_dtype = {
     # Integers
@@ -40,12 +40,11 @@ class FileStubGenerator:
 
     def __init__(self, config: StubGenerationConfig):
         self.config = config
-        self.__required_imports = {
+        self._required_imports = {
             # Library path -> set(name, (name, asname), ...)
         }  # TODO Render imports on start of the file
 
-        self.__numpy_required = False
-        self.__imported_symbols = set()
+        self._imported_symbols = set()
 
     def require_import(self, library_path: str, name: str, asname: str) -> py_ast.Name:
         """
@@ -55,11 +54,11 @@ class FileStubGenerator:
         :param name: The name of the item to import.
         :param asname: The alias to use for the imported item.
         """
-        if library_path not in self.__required_imports:
-            self.__required_imports[library_path] = set()
-        if name not in self.__required_imports[library_path]:
+        if library_path not in self._required_imports:
+            self._required_imports[library_path] = set()
+        if name not in self._required_imports[library_path]:
             elem = (name, asname) if asname else name
-            self.__required_imports[library_path].add(elem)
+            self._required_imports[library_path].add(elem)
 
         return py_ast.Name(name if not asname else asname, ctx=py_ast.Load())
 
@@ -78,7 +77,6 @@ class FileStubGenerator:
         return py_ast.Name(name)
 
     def generate_numpy_array_type(self, base_type: py_ast.Attribute) -> py_ast.Subscript:
-
         return py_ast.Subscript(
             value=py_ast.Attribute(
                 value=self.require_import('numpy', name='typing', asname='npt'),
@@ -98,7 +96,27 @@ class FileStubGenerator:
         return declarator.generate_stub_node(stub_gen), typ.generate_stub_node(stub_gen)
 
     def register_imported_symbol(self, symbol: str):
-        self.__imported_symbols.add(symbol)
+        self._imported_symbols.add(symbol)
+
+    def __generate_imports(self) -> Iterator[py_ast.AST]:
+        for lib_path, imports in self._required_imports.items():
+            names = []
+            for name, asname in imports:
+                imported_name = asname
+                if asname is None:
+                    imported_name = name
+
+                if imported_name in self._imported_symbols:
+                    continue
+                names.append(py_ast.alias(name=name, asname=asname))
+
+            if len(names) == 0:
+                continue
+
+            if lib_path is None:
+                yield py_ast.Import(names)
+            else:
+                yield py_ast.ImportFrom(module=lib_path, names=names, level=0)
 
     def inject_imports(self, stub_ast: py_ast.Module):
         """
@@ -107,8 +125,8 @@ class FileStubGenerator:
         :param stub_ast: The AST module to inject imports into.
         :return: The modified AST module with imports injected.
         """
-        # TODO
-        pass
+        for imp in self.__generate_imports():
+            stub_ast.body.insert(0, imp)
 
 
 def write_stubs_to_file(stub_asts, output_file: str):  # TODO Move

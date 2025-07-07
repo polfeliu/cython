@@ -6779,7 +6779,7 @@ class SingleAssignmentNode(AssignmentNode):
         if isinstance(self.rhs, ImportNode):
             name = self.rhs.module_name.constant_result
             asname = self.lhs.name
-            stub_gen.register_imported_symbol(stub_gen)
+            stub_gen.register_imported_symbol(asname)
             if name == asname:
                 asname = None
             return py_ast.Import(
