@@ -275,7 +275,7 @@ class TreeFragment:
 
         stub_gen = FileStubGenerator(config)
         module = py_ast.Module(body=self.root.generate_stub_nodes(stub_gen), type_ignores=[])
-        stub_gen.inject_imports(module)
+        stub_gen.inject_code(module)
         module = py_ast.fix_missing_locations(module)
         return module
 

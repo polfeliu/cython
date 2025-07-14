@@ -2,42 +2,6 @@ import ast as py_ast
 from ast import unparse
 from typing import Union, Iterator, Optional
 
-cython_to_numpy_dtype = {
-    # Integers
-    "char": "int8",
-    "signed char": "int8",
-    "unsigned char": "uint8",
-    "int8_t": "int8",
-    "uint8_t": "uint8",
-
-    "short": "int16",
-    "unsigned short": "uint16",
-    "int16_t": "int16",
-    "uint16_t": "uint16",
-
-    # "int" Built-in python type
-    "unsigned int": "uint32",
-    "int32_t": "int32",
-    "uint32_t": "uint32",
-
-    "long": "int64",
-    "unsigned long": "uint64",
-    "int64_t": "int64",
-    "uint64_t": "uint64",
-
-    "long long": "int64",
-    "unsigned long long": "uint64",
-
-    # Floating point
-    # "float" Built-in python type
-    "double": "float64",
-    "long double": "longdouble",
-
-    # Complex numbers
-    "float complex": "complex64",
-    "double complex": "complex128",
-}
-
 
 class StubGenerationConfig:
     def __init__(self, error_on_missing_implementation: bool = False):
@@ -45,14 +9,65 @@ class StubGenerationConfig:
 
 
 class FileStubGenerator:
+    CYTHON_TO_NUMPY_TYPES = {
+        # Integers
+        "char": "int8",
+        "signed char": "int8",
+        "unsigned char": "uint8",
+        "int8_t": "int8",
+        "uint8_t": "uint8",
+
+        "short": "int16",
+        "unsigned short": "uint16",
+        "int16_t": "int16",
+        "uint16_t": "uint16",
+
+        # "int" Built-in python type
+        "unsigned int": "uint32",
+        "int32_t": "int32",
+        "uint32_t": "uint32",
+
+        "long": "int64",
+        "unsigned long": "uint64",
+        "int64_t": "int64",
+        "uint64_t": "uint64",
+
+        "long long": "int64",
+        "unsigned long long": "uint64",
+
+        # Floating point
+        # "float" Built-in python type
+        "double": "float64",
+        "long double": "longdouble",
+
+        # Complex numbers
+        "float complex": "complex64",
+        "double complex": "complex128",
+    }
+
+    LIBC_TYPES_TO_PYTHON = {
+        'int8_t': 'int', 'int16_t': 'int', 'int32_t': 'int', 'int64_t': 'int',
+        'uint8_t': 'int', 'uint16_t': 'int', 'uint32_t': 'int', 'uint64_t': 'int',
+        'int_least8_t': 'int', 'int_least16_t': 'int', 'int_least32_t': 'int', 'int_least64_t': 'int',
+        'uint_least8_t': 'int', 'uint_least16_t': 'int', 'uint_least32_t': 'int', 'uint_least64_t': 'int',
+        'int_fast8_t': 'int', 'int_fast16_t': 'int', 'int_fast32_t': 'int', 'int_fast64_t': 'int',
+        'uint_fast8_t': 'int', 'uint_fast16_t': 'int', 'uint_fast32_t': 'int', 'uint_fast64_t': 'int',
+        'intmax_t': 'int', 'uintmax_t': 'int',
+    }
 
     def __init__(self, config: StubGenerationConfig):
         self.config = config
+        # Imports required by the stubs generation.
         self._required_imports = {
             # Library path -> set((name, asname), ...)
-        }  # TODO Render imports on start of the file
+        }
 
+        # Set of python symbols detected as imported in the pyx
         self._imported_symbols = set()
+
+        self.lib_c_alias_definitions = {
+            # py_type -> [c_type alias, ...]
+        }
 
     def require_import(self, library_path: str, name: str, asname: Optional[str] = None) -> py_ast.Name:
         """
@@ -70,8 +85,8 @@ class FileStubGenerator:
         return py_ast.Name(name if not asname else asname, ctx=py_ast.Load())
 
     def cython_to_python_type(self, name: str) -> Union[None, py_ast.Attribute, py_ast.Name]:
-        if name in cython_to_numpy_dtype:
-            nptype = cython_to_numpy_dtype[name]
+        if name in self.CYTHON_TO_NUMPY_TYPES:
+            nptype = self.CYTHON_TO_NUMPY_TYPES[name]
 
             return py_ast.Attribute(
                 value=self.require_import(None, name='numpy', asname='np'),
@@ -127,13 +142,50 @@ class FileStubGenerator:
             else:
                 yield py_ast.ImportFrom(module=lib_path, names=names, level=0)
 
-    def inject_imports(self, stub_ast: py_ast.Module):
+    def require_libc_alias(self, name: str, asname: Optional[str] = None):
+        """Require a libc type alias to be defined in the stubs.
+
+        :param name: Name of the libc type to alias.
+        :param asname: Name of the libc type used on the file
+        :return:
+        """
+        if name not in self.LIBC_TYPES_TO_PYTHON:
+            # Unknown libc type, we cannot generate an alias for it.
+            return
+        py_type = self.LIBC_TYPES_TO_PYTHON[name]
+
+        if py_type not in self.lib_c_alias_definitions:
+            self.lib_c_alias_definitions[py_type] = []
+
+        self.lib_c_alias_definitions[py_type].append(
+            name if asname is None else asname
+        )
+
+    def __generate_libc_aliases(self) -> Iterator[py_ast.AST]:
+        """
+        Generate the libc type aliases for the stubs.
+
+        :return: An iterator of AST nodes representing the libc type aliases.
+        """
+        for py_type, aliases in self.lib_c_alias_definitions.items():
+            if len(aliases) == 0:
+                continue
+
+            yield py_ast.Assign(
+                targets=[py_ast.Name(alias, ctx=py_ast.Store()) for alias in aliases],
+                value=py_ast.Name(py_type, ctx=py_ast.Load())
+            )
+
+    def inject_code(self, stub_ast: py_ast.Module):
         """
         Inject the required imports into the given AST module.
 
         :param stub_ast: The AST module to inject imports into.
         :return: The modified AST module with imports injected.
         """
+        for alias in self.__generate_libc_aliases():
+            stub_ast.body.insert(0, alias)
+
         for imp in self.__generate_imports():
             stub_ast.body.insert(0, imp)
 

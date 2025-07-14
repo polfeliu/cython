@@ -9761,26 +9761,12 @@ class FromCImportStatNode(StatNode):
 
     def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
         if self.module_name == 'libc.stdint':
-            # TODO Filter
-            # Create integer types alias
-            return py_ast.Assign(
-                targets=[
-                    py_ast.Name(id=int_name, ctx=py_ast.Store())
-                    for int_name in [
-                        'int8_t', 'int16_t', 'int32_t', 'int64_t',
-                        'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
-                        'int_least8_t', 'int_least16_t', 'int_least32_t', 'int_least64_t',
-                        'uint_least8_t', 'uint_least16_t', 'uint_least32_t', 'uint_least64_t',
-                        'int_fast8_t', 'int_fast16_t', 'int_fast32_t', 'int_fast64_t',
-                        'uint_fast8_t', 'uint_fast16_t', 'uint_fast32_t', 'uint_fast64_t',
-                        'intmax_t', 'uintmax_t'
-                    ]
-                ],
-                value=py_ast.Name(id='int', ctx=py_ast.Load()),
-                type_comment=None
-            )
+            for imported_name in self.imported_names:
+                name = imported_name[1]
+                asname = imported_name[2]
+                stub_gen.require_libc_alias(name, asname)
 
-        # C Imports are only used for internal implementation
+        # C Imports are typically only used for internal implementation
         return None
 
 
