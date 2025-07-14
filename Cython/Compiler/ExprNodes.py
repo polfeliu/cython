@@ -15325,6 +15325,12 @@ class AnnotationNode(ExprNode):
                 py_type = stub_gen.cython_to_python_type(self.expr.base.name)
                 return stub_gen.generate_numpy_array_type(py_type)
 
+        if isinstance(self.expr, AttributeNode) and isinstance(self.expr.obj, NameNode):
+            if self.expr.obj.name in ['np', 'numpy']:
+                # Potentially a numpy type
+                py_type = stub_gen.cython_to_python_type(self.expr.attribute)
+                return py_type
+
         if isinstance(self.expr, NameNode):
             # Replace cython types like bint, double, ...
             py_type = stub_gen.cython_to_python_type(self.expr.name)
