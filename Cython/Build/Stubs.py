@@ -58,16 +58,22 @@ class FileStubGenerator:
     def __init__(self, config: StubGenerationConfig):
         self.config = config
         # Imports required by the stubs generation.
-        self._required_imports = {
+        self._required_imports: dict[str, set[tuple[str, str]]] = {
             # Library path -> set((name, asname), ...)
         }
 
         # Set of python symbols detected as imported in the pyx
         self._imported_symbols = set()
 
-        self.lib_c_alias_definitions = {
-            # py_type -> [c_type alias, ...]
+        # C type aliases to be defined in the stubs.
+        self.c_alias_definitions: dict[str, set[str]] = {
+            # py_type -> set(c_type alias, ...)
         }
+
+        # Set of C symbols imported in the stubs.
+        # May be promoted to a c alias definition if annotation requires it.
+        self.imported_c_symbols = set()
+
 
     def require_import(self, library_path: str, name: str, asname: Optional[str] = None) -> py_ast.Name:
         """
@@ -95,6 +101,11 @@ class FileStubGenerator:
 
         if name == 'bint':
             return py_ast.Name('bool')
+
+        if name in self.imported_c_symbols:
+            # Create Any alias for the C definition
+            self.require_import('typing', 'Any')
+            self.__add_c_alias(py_type='Any', name=name)
 
         return py_ast.Name(name)
 
@@ -154,20 +165,21 @@ class FileStubGenerator:
             return
         py_type = self.LIBC_TYPES_TO_PYTHON[name]
 
-        if py_type not in self.lib_c_alias_definitions:
-            self.lib_c_alias_definitions[py_type] = []
+        self.__add_c_alias(py_type, name if asname is None else asname)
 
-        self.lib_c_alias_definitions[py_type].append(
-            name if asname is None else asname
-        )
+    def __add_c_alias(self, py_type: str, name: str):
+        if py_type not in self.c_alias_definitions:
+            self.c_alias_definitions[py_type] = set()
 
-    def __generate_libc_aliases(self) -> Iterator[py_ast.AST]:
+        self.c_alias_definitions[py_type].add(name)
+
+    def __generate_c_aliases(self) -> Iterator[py_ast.AST]:
         """
-        Generate the libc type aliases for the stubs.
+        Generate the c type aliases for the stubs.
 
         :return: An iterator of AST nodes representing the libc type aliases.
         """
-        for py_type, aliases in self.lib_c_alias_definitions.items():
+        for py_type, aliases in self.c_alias_definitions.items():
             if len(aliases) == 0:
                 continue
 
@@ -183,7 +195,7 @@ class FileStubGenerator:
         :param stub_ast: The AST module to inject imports into.
         :return: The modified AST module with imports injected.
         """
-        for alias in self.__generate_libc_aliases():
+        for alias in self.__generate_c_aliases():
             stub_ast.body.insert(0, alias)
 
         for imp in self.__generate_imports():

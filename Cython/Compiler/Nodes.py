@@ -1291,7 +1291,7 @@ class CSimpleBaseTypeNode(CBaseTypeNode):
         else:
             # Name of the type
             if not self.module_path:
-                return py_ast.Name(self.name)
+                return stub_gen.cython_to_python_type(self.name)
 
             stub = None
 
@@ -9672,7 +9672,11 @@ class CImportStatNode(StatNode):
             cimport_numpy_check(self, code)
 
     def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
-        # Imports from C are only used for internal implementation
+        # Imports from C typicall only used for internal implementation
+        # But they can sometimes be used as annotation
+        # Register the type
+        name = self.as_name or self.module_name
+        stub_gen.imported_c_symbols.add(name)
         return None
 
 
@@ -9766,7 +9770,14 @@ class FromCImportStatNode(StatNode):
                 asname = imported_name[2]
                 stub_gen.require_libc_alias(name, asname)
 
-        # C Imports are typically only used for internal implementation
+        # Imports from C typically only used for internal implementation
+        # But they can sometimes be used as annotation
+        # Register the types
+        for imported_name in self.imported_names:
+            name = imported_name[1]
+            asname = imported_name[2]
+            stub_gen.imported_c_symbols.add(asname or name)
+
         return None
 
 
