@@ -1736,6 +1736,12 @@ class CVarDefNode(StatNode):
                     self.entry.doc = embed_position(self.pos, self.doc)
 
     def generate_stub_node(self, stub_gen: "FileStubGenerator") -> Optional[py_ast.AST]:
+        # The declared symbols might be used in the future for typing
+        for decl in self.declarators:
+            if isinstance(decl, CPtrDeclaratorNode):
+                decl = decl.base
+            stub_gen.declared_c_symbols.add(decl.name)
+
         if self.visibility == "private":
             # Cannot be accessed
             return None
@@ -9676,7 +9682,7 @@ class CImportStatNode(StatNode):
         # But they can sometimes be used as annotation
         # Register the type
         name = self.as_name or self.module_name
-        stub_gen.imported_c_symbols.add(name)
+        stub_gen.declared_c_symbols.add(name)
         return None
 
 
@@ -9776,7 +9782,7 @@ class FromCImportStatNode(StatNode):
         for imported_name in self.imported_names:
             name = imported_name[1]
             asname = imported_name[2]
-            stub_gen.imported_c_symbols.add(asname or name)
+            stub_gen.declared_c_symbols.add(asname or name)
 
         return None
 

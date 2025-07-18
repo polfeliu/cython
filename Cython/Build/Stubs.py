@@ -72,7 +72,7 @@ class FileStubGenerator:
 
         # Set of C symbols imported in the stubs.
         # May be promoted to a c alias definition if annotation requires it.
-        self.imported_c_symbols = set()
+        self.declared_c_symbols = set()
 
 
     def require_import(self, library_path: str, name: str, asname: Optional[str] = None) -> py_ast.Name:
@@ -102,7 +102,7 @@ class FileStubGenerator:
         if name == 'bint':
             return py_ast.Name('bool')
 
-        if name in self.imported_c_symbols:
+        if name in self.declared_c_symbols:
             # Create Any alias for the C definition
             self.require_import('typing', 'Any')
             self.__add_c_alias(py_type='Any', name=name)

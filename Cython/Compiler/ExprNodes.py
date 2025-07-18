@@ -1366,7 +1366,7 @@ class EllipsisNode(PyConstNode):
         return Ellipsis
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
-        return py_ast.Constant(value=py_ast.Ellipsis())
+        return py_ast.Ellipsis()
 
 
 class ConstNode(AtomicExprNode):
@@ -2828,8 +2828,7 @@ class NameNode(AtomicExprNode):
         return None
 
     def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
-        # TODO stdint types
-        return py_ast.Name(self.name)
+        return stub_gen.cython_to_python_type(self.name)
 
 class BackquoteNode(ExprNode):
     #  `expr`
