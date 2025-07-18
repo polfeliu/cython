@@ -1,3 +1,4 @@
+import ast
 import ast as py_ast
 from ast import unparse
 from typing import Union, Iterator, Optional
@@ -200,6 +201,17 @@ class FileStubGenerator:
 
         for imp in self.__generate_imports():
             stub_ast.body.insert(0, imp)
+
+    def convert_type_to_const(self, typ: py_ast.AST) -> py_ast.Constant:
+        """Convert a Python AST node to a constant.
+
+        Some types might be defined as variables in the stubs,
+        Converting them to constants allows to define in any order.
+        """
+        if isinstance(typ, py_ast.Constant):
+            return typ
+        return py_ast.Constant(ast.unparse(typ))
+
 
 
 def write_stubs_to_file(stub_asts, output_file: str):  # TODO Move

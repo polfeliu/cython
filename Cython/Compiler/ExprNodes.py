@@ -15307,7 +15307,7 @@ class AnnotationNode(ExprNode):
 
         return modifiers, arg_type
 
-    def generate_stub_node(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
+    def __generate_stub_type(self, stub_gen: "StubGenerator") -> Optional[py_ast.AST]:
         if isinstance(self.expr, (IndexNode, SliceIndexNode)) and isinstance(self.expr.base, NameNode):
             # Handled numpy arrays indicated by double[:, :] or double[:]
             is_array = False
@@ -15336,6 +15336,11 @@ class AnnotationNode(ExprNode):
             return py_type
 
         return self.expr.generate_stub_node(stub_gen)
+
+    def generate_stub_node(self, stub_gen: "FileStubGenerator") -> list[py_ast.AST]:
+        expr = self.__generate_stub_type(stub_gen)
+        stub_gen.convert_type_to_const(expr)
+        return expr
 
 class AssignmentExpressionNode(ExprNode):
     """

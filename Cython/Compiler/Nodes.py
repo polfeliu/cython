@@ -1,7 +1,7 @@
 #
 #   Parse tree nodes
 #
-
+import ast
 
 import cython
 from Cython.Build.Stubs import FileStubGenerator
@@ -1152,6 +1152,7 @@ class CArgDeclNode(Node):
             if annotation is None:
                 # Get annotation from C
                 annotation = self.base_type.generate_stub_node(stub_gen)
+                annotation = stub_gen.convert_type_to_const(annotation)
 
         return py_ast.arg(
             arg=arg,
@@ -1595,7 +1596,9 @@ class FusedTypeNode(CBaseTypeNode):
                 value=stub_gen.require_import('typing', 'Union'),
                 slice=py_ast.Tuple(
                     elts=[
-                        type_node.generate_stub_node(stub_gen)
+                        stub_gen.convert_type_to_const(
+                            type_node.generate_stub_node(stub_gen)
+                        )
                         for type_node in self.types
                     ]
                 )
@@ -1740,7 +1743,11 @@ class CVarDefNode(StatNode):
         for decl in self.declarators:
             if isinstance(decl, CPtrDeclaratorNode):
                 decl = decl.base
-            stub_gen.declared_c_symbols.add(decl.name)
+            if isinstance(decl, CArrayDeclaratorNode):
+                decl = decl.base
+
+            if isinstance(decl, CNameDeclaratorNode):
+                stub_gen.declared_c_symbols.add(decl.name)
 
         if self.visibility == "private":
             # Cannot be accessed
@@ -1750,6 +1757,7 @@ class CVarDefNode(StatNode):
             return None
         elif self.visibility in ["readonly", "public"]:
             target, annotation = stub_gen.convert_declarator_and_type(self.declarators[0], self.base_type, stub_gen)
+            annotation = stub_gen.convert_type_to_const(annotation)
 
             if self.visibility == "readonly":
                 annotation = py_ast.Subscript(
@@ -6233,7 +6241,16 @@ class CClassDefNode(ClassDefNode):
         else:
             body = []
 
-        body= [func for func in body if not (isinstance(func, py_ast.FunctionDef) and func.name == "__cinit__")]
+        members = {func.name: func for func in body if isinstance(func, py_ast.FunctionDef)}
+
+        if "__init__" in members:
+            # If __init__ is defined, do not define __cinit__
+            if "__cinit__" in members:
+                cinit_func = members["__cinit__"]
+                body.remove(cinit_func)
+        elif "__cinit__" in members:
+            # If __cinit__ is defined, use it as __init__
+            members["__cinit__"].name = "__init__"
 
         if self.doc:
             body.insert(0, py_ast.Expr(py_ast.Constant(self.doc)))
@@ -6818,6 +6835,10 @@ class SingleAssignmentNode(AssignmentNode):
             # Multiple targets
             targets = [arg.generate_stub_node(stub_gen) for arg in self.lhs.args]
         else:
+            if self.lhs.name == "__slots__":
+                # Does not have any effect on typing
+                return None
+
             targets = [self.lhs.generate_stub_node(stub_gen)]
 
         return py_ast.Assign(
